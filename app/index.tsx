@@ -1,29 +1,33 @@
-import { Text, View, StyleSheet } from "react-native";
-import AntDesign from "@expo/vector-icons/AntDesign";
+import { useState, useEffect } from "react";
+import { Redirect } from "expo-router";
+import { AppSplashScreen } from "@/screens/SplashScreen";
+import { useAuth } from "@clerk/expo";
+import { useDriverStore } from "@/store/driverStore";
 
 export default function Index() {
-  return (
-    <View style={styles.container}>
-      <View style={styles.text}>
-        <Text>Edit app/index.tsx to edit this screen.</Text>
-        <AntDesign name="arrow-right" size={20} color="red" />
-      </View>
-    </View>
-  );
-}
+  const [appReady, setAppReady] = useState(false);
+  const { isLoaded, isSignedIn, getToken } = useAuth();
+  const { checkAuthStatus, isLoading } = useDriverStore();
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  text: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#333",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 10,
-  },
-});
+  useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      checkAuthStatus(getToken);
+    }
+  }, [isLoaded, isSignedIn]);
+
+  if (!appReady || !isLoaded || (isSignedIn && isLoading)) {
+    return (
+      <AppSplashScreen
+        onFinish={() => {
+          setAppReady(true);
+        }}
+      />
+    );
+  }
+
+  if (isSignedIn) {
+    return <Redirect href="/(main)/home" />;
+  }
+
+  return <Redirect href="/(auth)/welcome" />;
+}
