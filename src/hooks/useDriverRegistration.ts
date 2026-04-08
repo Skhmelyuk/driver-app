@@ -44,16 +44,30 @@ export function useUpdateUserProfile() {
   const { getToken } = useAuth();
   const api = createAuthenticatedAPI(getToken);
 
-  const mutation = useMutation({
+  return useMutation({
     mutationFn: api.updateUserProfile,
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ["driver", "profile"] });
       return response;
     },
   });
-
-  return mutation;
 }
+
+export function useUpdateDriverProfile() {
+  const queryClient = useQueryClient();
+  const { getToken } = useAuth();
+  const api = createAuthenticatedAPI(getToken);
+
+  return useMutation({
+    mutationFn: api.updateDriverProfile,
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ["driver", "profile"] });
+      return response;
+    },
+  });
+}
+
+
 
 export function useUploadDriverDocument() {
   const queryClient = useQueryClient();

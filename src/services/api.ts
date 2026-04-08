@@ -42,32 +42,25 @@ export const createAuthenticatedAPI = (
         throw error;
       }
     },
-    updateUserProfile: async (data: {
+    updateUserProfile: async (userData: {
       first_name?: string;
       last_name?: string;
       phone_number?: string;
       profile_image?: string;
       date_of_birth?: string;
+    }) => {
+      return authenticatedClient.patch("/users/update_profile/", userData);
+    },
+    updateDriverProfile: async (driverData: {
       vehicle_plate?: string;
       license_expiry?: string;
+      vehicle_type?: string;
+      vehicle_make?: string;
+      vehicle_model?: string;
+      vehicle_year?: number;
+      vehicle_color?: string;
     }) => {
-      // Split user and driver fields
-      const { vehicle_plate, license_expiry, ...userData } = data;
-      
-      const promises = [];
-      
-      if (Object.keys(userData).length > 0) {
-        promises.push(authenticatedClient.patch("/users/update_profile/", userData));
-      }
-      
-      if (vehicle_plate !== undefined || license_expiry !== undefined) {
-        promises.push(authenticatedClient.patch("/drivers/update_profile/", {
-          vehicle_plate,
-          license_expiry
-        }));
-      }
-      
-      return Promise.all(promises);
+      return authenticatedClient.patch("/drivers/update_profile/", driverData);
     },
     uploadDriverDocument: (formData: FormData) =>
       authenticatedClient.post("/drivers/documents/", formData, {

@@ -21,6 +21,7 @@ import { useUser, useAuth } from "@clerk/expo";
 import {
   useDriverProfile,
   useUpdateUserProfile,
+  useUpdateDriverProfile,
   useUploadDriverDocument,
   useDriverRegistration,
 } from "@/hooks/useDriverRegistration";
@@ -50,6 +51,7 @@ export default function ProfileScreen() {
   const { data: driverData, isLoading, isError, error, refetch } = useDriverProfile();
   const { registerAsync, isLoading: isRegistering } = useDriverRegistration();
   const updateProfile = useUpdateUserProfile();
+  const updateDriver = useUpdateDriverProfile();
   const uploadDocument = useUploadDriverDocument();
   const { setDriver } = useDriverStore();
   const { signOut } = useAuth();
@@ -133,47 +135,53 @@ export default function ProfileScreen() {
   }, [docEntries]);
 
   const onSubmit = handleSubmit(async (values) => {
-    const payload = {
+    const userPayload = {
       first_name: values.firstName.trim() || undefined,
       last_name: values.lastName.trim() || undefined,
       phone_number: buildPhonePayload(values.phoneNumber),
       date_of_birth: unmaskDateInput(values.dateOfBirth),
-      license_expiry: unmaskDateInput(values.licenseExpiry),
-      vehicle_plate: values.vehiclePlate,
     };
 
-    const hasProfileChanges = isDirty;
+    const driverPayload = {
+      vehicle_plate: values.vehiclePlate,
+      license_expiry: unmaskDateInput(values.licenseExpiry),
+    };
+
+    const hasUserChanges = isDirty; // simplification
     const hasDocuments = docEntries.length > 0;
-
-    if (!hasProfileChanges && !hasDocuments) {
-      Alert.alert(
-        "Немає змін",
-        "Оновіть дані профілю або додайте документи, щоб зберегти",
-      );
-      return;
-    }
-
     const isFirstTimeRegistration = !driverData;
 
     try {
-      if (hasProfileChanges || isFirstTimeRegistration) {
-        await updateProfile.mutateAsync(payload);
-        
-        if (isFirstTimeRegistration) {
-          await registerAsync({
-            vehicle_type: "economy", 
-          } as any);
-        }
+      // 1. Update User Profile always if there are changes or first time
+      await updateProfile.mutateAsync(userPayload);
 
-        reset(values);
+      // 2. If first time, register the driver
+      if (isFirstTimeRegistration) {
+        await registerAsync({
+          vehicle_type: "economy",
+          vehicle_make: "Не вказано",
+          vehicle_model: "Не вказано",
+          vehicle_year: new Date().getFullYear(),
+          vehicle_color: "Білий",
+          vehicle_plate: values.vehiclePlate || "Тимчасовий",
+          license_number: "Не вказано",
+          license_expiry: unmaskDateInput(values.licenseExpiry) || new Date().toISOString().split('T')[0],
+        } as any);
+      } else {
+        // 3. Update Driver Profile (only if not first time, because first time is handled by register)
+        await updateDriver.mutateAsync(driverPayload);
       }
 
+      // 4. Handle Documents
       if (hasDocuments) {
         for (const [docType, files] of docEntries) {
           if (Array.isArray(files)) {
             for (let i = 0; i < files.length; i++) {
               const formData = new FormData();
-              const dt = (docType === "vehicle_photo" && i > 0) ? `vehicle_photo_${i + 1}` : docType;
+              const dt =
+                docType === "vehicle_photo" && i > 0
+                  ? `vehicle_photo_${i + 1}`
+                  : docType;
               formData.append("doc_type", dt);
               formData.append("file", {
                 uri: files[i].uri,
@@ -196,8 +204,14 @@ export default function ProfileScreen() {
         setPendingDocuments({});
       }
 
-      showToast("Профіль успішно оновлено");
+      reset(values);
+      showToast(isFirstTimeRegistration ? "Профіль створено успішно" : "Профіль оновлено");
+      
+      if (isFirstTimeRegistration) {
+        refetch();
+      }
     } catch (error) {
+      console.error("Profile update error:", error);
       Alert.alert("Помилка", getErrorMessage(error));
     }
   });
@@ -253,6 +267,14 @@ export default function ProfileScreen() {
       Alert.alert("Помилка", "Не вдалося завантажити фото");
     } finally {
       setIsUploadingAvatar(false);
+    }
+  };
+
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(main)/home" as any);
     }
   };
 
@@ -363,7 +385,7 @@ export default function ProfileScreen() {
               styles.footerButton,
               { width: "100%", backgroundColor: Colors.primary },
             ]}
-            onPress={() => router.back()}
+            onPress={handleBack}
           >
             <Text style={{ color: "#FFF", fontWeight: "600" }}>Назад</Text>
           </TouchableOpacity>
@@ -382,7 +404,7 @@ export default function ProfileScreen() {
   }
 
   const hasPendingDocs = docEntries.length > 0;
-  const saveInProgress = updateProfile.isPending || uploadDocument.isPending || isRegistering;
+  const saveInProgress = updateProfile.isPending || updateDriver.isPending || uploadDocument.isPending || isRegistering;
   const isFirstTimeRegistration = !driverData;
   const isSaveDisabled = saveInProgress || (!isDirty && !hasPendingDocs && !isFirstTimeRegistration);
 
@@ -404,7 +426,7 @@ export default function ProfileScreen() {
           <View style={styles.screenLayout}>
             <View style={{ paddingHorizontal: 24, paddingTop: 10 }}>
               <ProfileHeader 
-                onBack={() => router.back()} 
+                onBack={handleBack} 
                 onLogout={handleLogout}
                 compact={isCompact} 
               />
