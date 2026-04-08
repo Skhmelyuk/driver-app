@@ -2,10 +2,19 @@ import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { useAuth } from "@clerk/expo";
 import { useRouter } from "expo-router";
+import { useDriverProfile } from "@/hooks/useDriverRegistration";
+import { ActivityIndicator } from "react-native";
 
 export default function HomeScreen() {
   const { signOut } = useAuth();
   const router = useRouter();
+  const { data: driverData, isLoading } = useDriverProfile();
+
+  React.useEffect(() => {
+    if (!isLoading && driverData === null) {
+      router.replace("/(main)/profile" as any);
+    }
+  }, [driverData, isLoading, router]);
 
   const handleOpenProfile = () => {
     router.push("/(main)/profile" as any);
@@ -15,6 +24,14 @@ export default function HomeScreen() {
     await signOut();
     router.replace("/(auth)/welcome" as any);
   };
+
+  if (isLoading || driverData === null) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color="#2F80ED" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

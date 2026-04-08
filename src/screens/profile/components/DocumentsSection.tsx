@@ -1,6 +1,10 @@
 import React, { useMemo } from "react";
-import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
+import { Text, TouchableOpacity, View, Platform, Modal, TextInput, Pressable, StyleSheet, KeyboardAvoidingView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { CheckmarkIcon } from "@/components/icons/CheckmarkIcon";
+import { AttachIcon } from "@/components/icons/AttachIcon";
+import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import { useFormContext, useWatch } from "react-hook-form";
 
 import { Colors } from "@/constants/theme";
 import { profileStyles as styles } from "@/styles/profile.styles";
@@ -10,21 +14,22 @@ import type {
   DriverDocumentStatus,
   DriverDocumentType,
 } from "@/types/auth.types";
-import type { DocumentCardConfig } from "@/screens/profile/types";
+import type { DocumentCardConfig, DocumentInfoCard, ProfileFormValues } from "@/screens/profile/types";
 import { formatDateDisplay } from "@/screens/profile/utils";
 
 type DocumentsSectionProps = {
   driver?: Driver | null;
   documents: DriverDocument[];
-  uploadingDoc: DriverDocumentType | null;
-  isUploading: boolean;
   onUpload: (docType: DriverDocumentType) => void;
+  pendingDocuments?: Partial<Record<DriverDocumentType, boolean>>;
+  disableInteractions?: boolean;
   compact?: boolean;
   narrow?: boolean;
 };
 
-const BADGE_LABEL: Record<DriverDocumentStatus, string> = {
+const BADGE_LABEL: Record<string, string> = {
   pending: "обов'язково",
+  reviewing: "на перевірці",
   approved: "перевірено",
   rejected: "оновити",
 };
@@ -57,7 +62,7 @@ function buildCards(driver?: Driver | null): DocumentCardConfig[] {
       key: "vehicle_plate",
       layout: "half",
       kind: "info",
-      title: driver?.vehicle_plate ?? "XX 0000 XX",
+      title: "Номер авто",
     },
     {
       key: "insurance_policy",
@@ -79,16 +84,48 @@ function buildCards(driver?: Driver | null): DocumentCardConfig[] {
 export const DocumentsSection: React.FC<DocumentsSectionProps> = ({
   driver,
   documents,
-  uploadingDoc,
-  isUploading,
   onUpload,
+  pendingDocuments,
+  disableInteractions,
   compact,
   narrow,
 }) => {
+  const { control, setValue } = useFormContext<ProfileFormValues>();
+  const [showExpiryPicker, setShowExpiryPicker] = React.useState(false);
+  
+  const licenseExpiryValue = useWatch({
+    control,
+    name: "licenseExpiry",
+  });
+  const vehiclePlateValue = useWatch({
+    control,
+    name: "vehiclePlate",
+  });
+
+  const [showPlateModal, setShowPlateModal] = React.useState(false);
+  const [plateInputValue, setPlateInputValue] = React.useState("");
+
   const cards = useMemo(() => buildCards(driver), [driver]);
 
   const getDocumentByType = (type: DriverDocumentType) =>
     documents.find((doc) => doc.doc_type === type);
+
+  // ... (allDocsApproved, onExpiryChange, parseDate)
+  
+  const onCardPress = (card: DocumentCardConfig) => {
+    // if (disableInteractions) return;
+    if (card.key === "license_expiry") {
+      setShowExpiryPicker(true);
+    } else if (card.key === "vehicle_plate") {
+      setPlateInputValue(vehiclePlateValue || "");
+      setShowPlateModal(true);
+    }
+  };
+
+  const onPlateSubmit = () => {
+    setValue("vehiclePlate", plateInputValue.toUpperCase(), { shouldDirty: true });
+    setShowPlateModal(false);
+  };
 
   const allDocsApproved = useMemo(() => {
     const docTypes: DriverDocumentType[] = [
@@ -102,6 +139,25 @@ export const DocumentsSection: React.FC<DocumentsSectionProps> = ({
       return doc?.status === "approved";
     });
   }, [documents]);
+
+  const onExpiryChange = (event: DateTimePickerEvent, date?: Date) => {
+    setShowExpiryPicker(false);
+    if (date) {
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const year = date.getFullYear();
+      setValue("licenseExpiry", `${day}.${month}.${year}`, { shouldDirty: true });
+    }
+  };
+
+  const parseDate = (dateStr: string) => {
+    if (!dateStr) return new Date();
+    const [d, m, y] = dateStr.split(".");
+    if (d && m && y && y.length === 4) {
+      return new Date(Number(y), Number(m) - 1, Number(d));
+    }
+    return new Date();
+  };
 
   return (
     <View
@@ -120,14 +176,42 @@ export const DocumentsSection: React.FC<DocumentsSectionProps> = ({
         {cards.map((card) => {
           const isDoc = card.kind === "doc";
           const doc = isDoc ? getDocumentByType(card.docType) : undefined;
-          const status: DriverDocumentStatus = isDoc
-            ? (doc?.status ?? "pending")
-            : allDocsApproved
-              ? "approved"
-              : "pending";
+          
+          let status: string;
+          if (isDoc) {
+             const isLocallyPending = Boolean(pendingDocuments?.[card.docType]);
+             if (isLocallyPending) {
+                status = "pending";
+             } else if (doc) {
+                status = doc.status === "pending" ? "reviewing" : doc.status;
+             } else {
+                status = "pending";
+             }
+          } else if (card.key === "license_expiry") {
+             const licenseDoc = getDocumentByType("driver_license");
+             if (licenseDoc?.status === "approved") {
+                status = "approved";
+             } else if (licenseDoc?.status === "pending") {
+                status = "reviewing";
+             } else {
+                status = "pending";
+             }
+          } else if (card.key === "vehicle_plate") {
+             const regDoc = getDocumentByType("vehicle_registration");
+             if (regDoc?.status === "approved") {
+                status = "approved";
+             } else if (regDoc?.status === "pending") {
+                status = "reviewing";
+             } else {
+                status = "pending";
+             }
+          } else {
+             status = allDocsApproved ? "approved" : "pending";
+          }
+
           const isApproved = status === "approved";
-          const showUploading =
-            isDoc && uploadingDoc === card.docType && isUploading;
+          const isReviewing = status === "reviewing";
+          const showPendingUpload = isDoc && Boolean(pendingDocuments?.[card.docType]);
 
           const cardStyle = [
             styles.documentCard,
@@ -139,46 +223,69 @@ export const DocumentsSection: React.FC<DocumentsSectionProps> = ({
               : styles.documentCardFull,
             isApproved
               ? styles.documentCardApproved
-              : status === "rejected"
-                ? styles.documentCardRejected
-                : styles.documentCardPending,
+              : isReviewing
+                ? styles.documentCardReviewing
+                : status === "rejected"
+                  ? styles.documentCardRejected
+                  : styles.documentCardPending,
+            card.key === "vehicle_photo" && styles.documentCardPhoto,
+            card.key === "vehicle_photo" && compact && styles.documentCardPhotoCompact,
           ];
 
           let badgeText = BADGE_LABEL[status];
           if (card.key === "vehicle_photo") {
             badgeText = isApproved ? "перевірено 3 фото" : "обов'язково 3 фото";
           }
+          if (showPendingUpload) {
+            badgeText = "очікує збереження";
+          }
 
-          const displayTitle =
-            card.kind === "info" && card.value && isApproved
-              ? card.value
-              : card.title;
+          let displayTitle: string = card.title;
+          if (card.key === "license_expiry") {
+             const infoCard = card as DocumentInfoCard;
+             displayTitle = licenseExpiryValue || infoCard.value || card.title;
+          } else if (card.key === "vehicle_plate") {
+             displayTitle = vehiclePlateValue || card.title;
+          } else if (card.kind === "info" && isApproved) {
+             const infoCard = card as DocumentInfoCard;
+             displayTitle = infoCard.value || card.title;
+          }
 
           const renderIcons = () => {
-            if (showUploading) {
-              return <ActivityIndicator size="small" color={Colors.black} />;
-            }
-            if (isApproved) {
+             const iconColor = isApproved 
+                ? Colors.success 
+                : isReviewing 
+                   ? "#FF9500" 
+                   : Colors.black;
+
+            if (isApproved || isReviewing) {
               return (
                 <>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={24}
-                    color={Colors.success}
-                  />
-                  {card.kind === "info" && card.icon && (
+                  {isApproved && card.key !== "license_expiry" && card.key !== "vehicle_plate" && (
+                    <CheckmarkIcon size={24} />
+                  )}
+                  {(card.key === "license_expiry" || card.key === "vehicle_plate") && (
                     <Ionicons
-                      name={card.icon as any}
+                      name="create-outline"
                       size={20}
-                      color={Colors.black}
+                      color={iconColor}
                       style={styles.documentIconSpacing}
                     />
                   )}
                 </>
               );
             }
+            if (showPendingUpload) {
+              return (
+                <Ionicons
+                  name="cloud-upload-outline"
+                  size={24}
+                  color={Colors.black}
+                />
+              );
+            }
             if (isDoc) {
-              return <Ionicons name="attach" size={24} color={Colors.black} />;
+              return <AttachIcon size={24} />;
             }
             if (card.kind === "info" && card.icon) {
               return (
@@ -199,21 +306,42 @@ export const DocumentsSection: React.FC<DocumentsSectionProps> = ({
                   style={[
                     styles.documentBadgeText,
                     isApproved && styles.documentBadgeTextApproved,
+                    isReviewing && styles.documentBadgeTextReviewing,
                   ]}
                 >
                   {badgeText}
                 </Text>
               </View>
               <View style={styles.documentCardBody}>
-                <Text
-                  style={[
-                    styles.documentTitle,
-                    compact && styles.documentTitleCompact,
-                  ]}
-                  numberOfLines={2}
-                >
-                  {displayTitle}
-                </Text>
+                {card.key === "vehicle_plate" ? (
+                  <TextInput
+                    style={[
+                      styles.documentTitle,
+                      compact && styles.documentTitleCompact,
+                      isReviewing && styles.documentTitleReviewing,
+                      isApproved && { color: Colors.success },
+                      { minWidth: 100 }
+                    ]}
+                    value={vehiclePlateValue}
+                    onChangeText={(val) => setValue("vehiclePlate", val.toUpperCase(), { shouldDirty: true })}
+                    placeholder="Номер авто"
+                    placeholderTextColor={isReviewing ? "rgba(255, 149, 0, 0.5)" : "#999"}
+                    autoCapitalize="characters"
+                    editable={!disableInteractions}
+                  />
+                ) : (
+                  <Text
+                    style={[
+                      styles.documentTitle,
+                      compact && styles.documentTitleCompact,
+                      isApproved && styles.documentTitleApproved,
+                      isReviewing && styles.documentTitleReviewing,
+                    ]}
+                    numberOfLines={2}
+                  >
+                    {displayTitle}
+                  </Text>
+                )}
               </View>
               <View style={styles.documentIcons}>{renderIcons()}</View>
             </>
@@ -226,11 +354,25 @@ export const DocumentsSection: React.FC<DocumentsSectionProps> = ({
                 activeOpacity={0.85}
                 style={cardStyle}
                 onPress={() => onUpload(card.docType)}
-                disabled={isUploading}
+                disabled={Boolean(disableInteractions)}
               >
                 {content}
               </TouchableOpacity>
             );
+          }
+
+          if (card.key === "license_expiry") {
+             return (
+               <TouchableOpacity
+                 key={card.key}
+                 activeOpacity={0.85}
+                 style={cardStyle}
+                 onPress={() => setShowExpiryPicker(true)}
+                 disabled={Boolean(disableInteractions)}
+               >
+                 {content}
+               </TouchableOpacity>
+             );
           }
 
           return (
@@ -240,6 +382,17 @@ export const DocumentsSection: React.FC<DocumentsSectionProps> = ({
           );
         })}
       </View>
+      {showExpiryPicker && (
+         <DateTimePicker
+           value={parseDate(licenseExpiryValue)}
+           mode="date"
+           display={Platform.OS === "ios" ? "spinner" : "default"}
+           onChange={onExpiryChange}
+           minimumDate={new Date()}
+         />
+      )}
     </View>
   );
 };
+
+export default DocumentsSection;

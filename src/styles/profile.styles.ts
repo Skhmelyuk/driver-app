@@ -24,18 +24,17 @@ export const profileStyles = StyleSheet.create({
     justifyContent: "space-between",
   },
   content: {
-    flex: 1,
     flexGrow: 1,
     paddingHorizontal: 24,
     paddingTop: 20,
-    paddingBottom: 16,
+    paddingBottom: 100, // Added more bottom padding for keyboard
     justifyContent: "flex-start",
   },
   contentCompact: {
     flexGrow: 1,
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 12,
+    paddingBottom: 80,
     justifyContent: "flex-start",
   },
   contentNarrow: {
@@ -68,6 +67,12 @@ export const profileStyles = StyleSheet.create({
   },
   headerSpacer: {
     width: 44,
+  },
+  headerRight: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarSection: {
     alignItems: "center",
@@ -333,20 +338,30 @@ export const profileStyles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: palette.accent,
     backgroundColor: "#FFFFFF",
-    paddingVertical: 16,
+    paddingVertical: 10,
     paddingHorizontal: 14,
     marginBottom: 10,
-    minHeight: 56,
+    minHeight: 48,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   documentCardCompact: {
-    paddingTop: 14,
-    paddingBottom: 12,
+    paddingTop: 8,
+    paddingBottom: 6,
     paddingHorizontal: 12,
     marginBottom: 8,
     borderRadius: 8,
+    minHeight: 40,
+  },
+  documentCardPhoto: {
+    paddingVertical: 16,
+    minHeight: 56,
+  },
+  documentCardPhotoCompact: {
+    paddingTop: 14,
+    paddingBottom: 12,
+    minHeight: 52,
   },
   documentCardHalf: {
     width: "48%",
@@ -366,6 +381,9 @@ export const profileStyles = StyleSheet.create({
   documentCardRejected: {
     borderColor: palette.accent,
   },
+  documentCardReviewing: {
+    borderColor: "#FF9500",
+  },
   documentBadge: {
     position: "absolute",
     top: -9,
@@ -381,6 +399,9 @@ export const profileStyles = StyleSheet.create({
   documentBadgeTextApproved: {
     color: Colors.success,
   },
+  documentBadgeTextReviewing: {
+    color: "#FF9500",
+  },
   documentCardBody: {
     flex: 1,
     alignItems: "center",
@@ -390,8 +411,14 @@ export const profileStyles = StyleSheet.create({
   documentTitle: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#c79191",
+    color: "#c79191", // default/pending color
     textAlign: "center",
+  },
+  documentTitleApproved: {
+    color: Colors.success,
+  },
+  documentTitleReviewing: {
+    color: "#FF9500",
   },
   documentTitleCompact: {
     fontSize: 14,
@@ -454,5 +481,95 @@ export const profileStyles = StyleSheet.create({
   footerButtonCompact: {
     height: 48,
     borderRadius: 14,
+  },
+  toastContainer: {
+    position: "absolute",
+    top: 50,
+    left: 20,
+    right: 20,
+    backgroundColor: "#333",
+    padding: 16,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+    elevation: 8,
+    zIndex: 9999,
+  },
+  toastText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+    marginLeft: 10,
+    flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modalContent: {
+    width: "100%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#1A1A1A",
+    marginBottom: 24,
+  },
+  plateInput: {
+    width: "100%",
+    height: 64,
+    borderWidth: 2,
+    borderColor: "#F0F0F0",
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    fontSize: 24,
+    fontWeight: "700",
+    textAlign: "center",
+    color: "#1A1A1A",
+    backgroundColor: "#F9FAFB",
+    marginBottom: 32,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    gap: 16,
+  },
+  modalButton: {
+    flex: 1,
+    height: 56,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalButtonCancel: {
+    backgroundColor: "#F3F4F6",
+  },
+  modalButtonSubmit: {
+    backgroundColor: Colors.primary,
+  },
+  modalButtonTextCancel: {
+    color: "#4B5563",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  modalButtonTextSubmit: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });

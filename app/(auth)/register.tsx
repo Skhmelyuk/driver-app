@@ -65,15 +65,13 @@ export default function RegisterScreen() {
       }
 
       // 2. Update user profile details (Name + Phone)
-      // NOTE: publicMetadata cannot be set from the client (Clerk restriction).
-      // Role 'driver' will be assigned by the Django webhook (user.created/user.updated)
-      // via Clerk Backend API. We use unsafeMetadata for phone (allowed from client).
       const fullPhone = `+380${data.phone}`;
       await (signUp as any).update({
         firstName: data.firstName,
         lastName: data.lastName,
         unsafeMetadata: {
           phone_number: fullPhone,
+          intended_role: "driver",
         },
       });
 
@@ -196,7 +194,7 @@ export default function RegisterScreen() {
                   <View style={styles.separator} />
                   <TextInput
                     style={styles.phoneInput}
-                    placeholder="Ваш номер телефону"
+                    placeholder="50 000 20 25"
                     placeholderTextColor="#A0A0A0"
                     keyboardType="phone-pad"
                     maxLength={9}

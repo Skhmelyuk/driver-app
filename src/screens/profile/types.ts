@@ -6,6 +6,8 @@ export type ProfileFormValues = {
   phoneNumber: string;
   dateOfBirth: string;
   profileImage: string;
+  licenseExpiry: string;
+  vehiclePlate: string;
 };
 
 export type DocumentCardLayout = "half" | "full";

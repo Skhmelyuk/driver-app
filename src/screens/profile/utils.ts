@@ -2,7 +2,7 @@ import { Driver } from "@/types/auth.types";
 import { ProfileFormValues } from "@/screens/profile/types";
 
 export const PHONE_MASK = "+380";
-const PHONE_GROUPS = [3, 3, 2, 2];
+const PHONE_GROUPS = [2, 3, 2, 2]; // 2+3+2+2 = 9 digits (e.g., 50 123 45 67)
 export const ACCENT_COLOR = "#F75555";
 
 export function stripPhoneToNineDigits(value: string) {
@@ -23,7 +23,7 @@ export function stripPhoneToNineDigits(value: string) {
 
 export function formatPhoneDisplay(digits: string) {
   if (!digits) return "";
-  const displayDigits = `0${digits}`.slice(0, 10);
+  const displayDigits = digits.slice(0, 9);
   const parts: string[] = [];
   let index = 0;
   for (const group of PHONE_GROUPS) {
@@ -70,6 +70,8 @@ export function mapDriverToFormValues(
     phoneNumber: formatPhoneDisplay(digits),
     dateOfBirth: formatDateDisplay(driver?.user.date_of_birth),
     profileImage: driver?.user.profile_image ?? "",
+    licenseExpiry: formatDateDisplay(driver?.license_expiry),
+    vehiclePlate: driver?.vehicle_plate ?? "",
   };
 }
 
@@ -82,10 +84,16 @@ export function buildPhonePayload(value: string) {
 export function getErrorMessage(error: unknown): string {
   if (!error) return "Сталася невідома помилка";
   const err = error as any;
-  return (
-    err?.response?.data?.error ||
-    err?.response?.data?.detail ||
-    err?.message ||
-    "Щось пішло не так, спробуйте ще раз"
-  );
+  
+  // Handle backend error object {code, message, details, timestamp}
+  const data = err?.response?.data;
+  if (data && typeof data === 'object') {
+    if (typeof data.message === 'string') return data.message;
+    if (typeof data.error === 'string') return data.error;
+    if (typeof data.detail === 'string') return data.detail;
+  }
+
+  if (typeof err.message === 'string') return err.message;
+  
+  return "Щось пішло не так, спробуйте ще раз";
 }

@@ -28,8 +28,8 @@ export const useDriverStore = create<DriverState>((set, get) => ({
       }
 
       const api = createAuthenticatedAPI(getToken);
-      const response = await api.getProfile();
-      set({ driver: response.data });
+      const driver = await api.getProfile();
+      set({ driver });
     } catch (error) {
       console.error("Auth check failed:", error);
       get().clearDriver();

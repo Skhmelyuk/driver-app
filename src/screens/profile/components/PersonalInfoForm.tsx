@@ -1,7 +1,8 @@
 import React, { memo } from "react";
 import { Controller, Control, FieldErrors } from "react-hook-form";
-import { Text, TextInput, View } from "react-native";
+import { Text, TextInput, View, TouchableOpacity, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 
 import { Colors } from "@/constants/theme";
 import { profileStyles as styles } from "@/styles/profile.styles";
@@ -26,7 +27,33 @@ const PersonalInfoFormComponent: React.FC<PersonalInfoFormProps> = ({
   phonePrefix,
   compact,
   narrow,
-}) => (
+}) => {
+  const [showPicker, setShowPicker] = React.useState(false);
+
+  const onDateChange = (
+    event: DateTimePickerEvent,
+    selectedDate?: Date,
+    onChange?: (value: string) => void,
+  ) => {
+    setShowPicker(false);
+    if (selectedDate && onChange) {
+      const day = String(selectedDate.getDate()).padStart(2, "0");
+      const month = String(selectedDate.getMonth() + 1).padStart(2, "0");
+      const year = selectedDate.getFullYear();
+      onChange(`${day}.${month}.${year}`);
+    }
+  };
+
+  const parseDate = (dateStr: string) => {
+    if (!dateStr) return new Date();
+    const [d, m, y] = dateStr.split(".");
+    if (d && m && y && y.length === 4) {
+      return new Date(Number(y), Number(m) - 1, Number(d));
+    }
+    return new Date();
+  };
+
+  return (
   <View
     style={[
       styles.formSection,
@@ -117,9 +144,10 @@ const PersonalInfoFormComponent: React.FC<PersonalInfoFormProps> = ({
             <TextInput
               style={[styles.phoneInput, compact && styles.phoneInputCompact]}
               keyboardType="phone-pad"
-              placeholder="050 000 20 25"
+              placeholder="50 000 20 25"
               placeholderTextColor={Colors.gray}
               value={value}
+              maxLength={15} // Allow space for formatting
               onChangeText={(text) => {
                 const digits = stripPhoneToNineDigits(text);
                 onChange(formatPhoneDisplay(digits));
@@ -138,32 +166,43 @@ const PersonalInfoFormComponent: React.FC<PersonalInfoFormProps> = ({
         control={control}
         name="dateOfBirth"
         render={({ field: { onChange, value } }) => (
-          <View
-            style={[
-              styles.dateField,
-              compact && styles.dateFieldCompact,
-              errors.dateOfBirth && styles.fieldError,
-            ]}
-          >
-            <TextInput
-              style={{
-                flex: 1,
-                fontSize: compact ? 15 : 16,
-                color: Colors.black,
-              }}
-              placeholder="Дата народження"
-              placeholderTextColor={Colors.gray}
-              keyboardType="number-pad"
-              value={value}
-              onChangeText={(text) => onChange(maskDateInput(text))}
-            />
-            <Ionicons
-              name="chevron-down"
-              size={18}
-              color="#8C88A3"
-              style={styles.dateChevron}
-            />
-          </View>
+          <>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setShowPicker(true)}
+              style={[
+                styles.dateField,
+                compact && styles.dateFieldCompact,
+                errors.dateOfBirth && styles.fieldError,
+              ]}
+            >
+              <Text
+                style={{
+                  flex: 1,
+                  fontSize: compact ? 15 : 16,
+                  color: value ? Colors.black : Colors.gray,
+                }}
+              >
+                {value || "Дата народження"}
+              </Text>
+              <Ionicons
+                name="calendar-outline"
+                size={20}
+                color="#8C88A3"
+                style={styles.dateChevron}
+              />
+            </TouchableOpacity>
+
+            {showPicker && (
+              <DateTimePicker
+                value={parseDate(value)}
+                mode="date"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                onChange={(event, date) => onDateChange(event, date, onChange)}
+                maximumDate={new Date()}
+              />
+            )}
+          </>
         )}
       />
       {errors.dateOfBirth ? (
@@ -171,7 +210,8 @@ const PersonalInfoFormComponent: React.FC<PersonalInfoFormProps> = ({
       ) : null}
     </View>
   </View>
-);
+  );
+};
 
 export const PersonalInfoForm = memo(PersonalInfoFormComponent);
 

@@ -5,6 +5,7 @@ import { DriverRegistrationData } from "@/types/auth.types";
 import { useDriverStore } from "@/store/driverStore";
 
 export function useDriverRegistration() {
+  const queryClient = useQueryClient();
   const { setDriver } = useDriverStore();
   const { getToken } = useAuth();
   const api = createAuthenticatedAPI(getToken);
@@ -13,11 +14,13 @@ export function useDriverRegistration() {
     mutationFn: (data: DriverRegistrationData) => api.registerDriver(data),
     onSuccess: (response: any) => {
       setDriver(response.data);
+      queryClient.invalidateQueries({ queryKey: ["driver", "profile"] });
     },
   });
 
   return {
     register: registerMutation.mutate,
+    registerAsync: registerMutation.mutateAsync,
     isLoading: registerMutation.isPending,
     error: registerMutation.error,
     isSuccess: registerMutation.isSuccess,
@@ -33,7 +36,6 @@ export function useDriverProfile() {
     queryKey: ["driver", "profile"],
     queryFn: () => api.getProfile(),
     enabled: isLoaded && isSignedIn,
-    select: (response) => response.data,
   });
 }
 
