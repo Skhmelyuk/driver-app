@@ -228,8 +228,8 @@ export const DocumentsSection: React.FC<DocumentsSectionProps> = ({
                 : status === "rejected"
                   ? styles.documentCardRejected
                   : styles.documentCardPending,
-            card.key === "vehicle_photo" && styles.documentCardPhoto,
             card.key === "vehicle_photo" && compact && styles.documentCardPhotoCompact,
+            disableInteractions && { opacity: 0.65 },
           ];
 
           let badgeText = BADGE_LABEL[status];

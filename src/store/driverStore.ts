@@ -2,19 +2,29 @@ import { create } from "zustand";
 import { Driver } from "@/types/auth.types";
 import { createAuthenticatedAPI } from "@/services/api";
 
+interface DriverRegistrationStoreData {
+  firstName: string;
+  lastName: string;
+  phone: string;
+}
+
 interface DriverState {
   driver: Driver | null;
   isLoading: boolean;
+  registrationData: DriverRegistrationStoreData | null;
 
   // Actions
   setDriver: (driver: Driver | null) => void;
   checkAuthStatus: (getToken: () => Promise<string | null>) => Promise<void>;
   clearDriver: () => void;
+  setRegistrationData: (data: DriverRegistrationStoreData | null) => void;
+  clearRegistrationData: () => void;
 }
 
 export const useDriverStore = create<DriverState>((set, get) => ({
   driver: null,
   isLoading: true,
+  registrationData: null,
 
   setDriver: (driver) => {
     set({ driver });
@@ -40,5 +50,13 @@ export const useDriverStore = create<DriverState>((set, get) => ({
 
   clearDriver: () => {
     set({ driver: null });
+  },
+
+  setRegistrationData: (data) => {
+    set({ registrationData: data });
+  },
+
+  clearRegistrationData: () => {
+    set({ registrationData: null });
   },
 }));

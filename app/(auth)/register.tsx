@@ -17,6 +17,7 @@ import { useForm, Controller } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
 import { useSignUp } from "@clerk/expo";
+import { useDriverStore } from "@/store/driverStore";
 import { registerStyles as styles } from "@/styles/register.styles";
 
 const schema = yup.object().shape({
@@ -36,6 +37,7 @@ const schema = yup.object().shape({
 export default function RegisterScreen() {
   const router = useRouter();
   const { signUp } = useSignUp();
+  const setRegistrationData = useDriverStore((state) => state.setRegistrationData);
   const [agreed, setAgreed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -75,7 +77,14 @@ export default function RegisterScreen() {
         },
       });
 
-      // 3. Prepare email verification
+      // 3. Save to global store for profile page pre-filling
+      setRegistrationData({
+        firstName: data.firstName,
+        lastName: data.lastName,
+        phone: data.phone,
+      });
+
+      // 4. Prepare email verification
       const { error: sendCodeError } =
         await signUp.verifications.sendEmailCode();
 

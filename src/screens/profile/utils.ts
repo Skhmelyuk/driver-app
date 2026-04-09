@@ -61,12 +61,13 @@ export function formatDateDisplay(value?: string | null) {
 
 export function mapDriverToFormValues(
   driver: Driver | null | undefined,
+  registrationData?: { firstName: string; lastName: string; phone: string } | null,
 ): ProfileFormValues {
-  const rawPhone = driver?.user.phone_number ?? "";
+  const rawPhone = driver?.user.phone_number ?? (registrationData ? `+380${registrationData.phone}` : "");
   const digits = stripPhoneToNineDigits(rawPhone);
   return {
-    firstName: driver?.user.first_name ?? "",
-    lastName: driver?.user.last_name ?? "",
+    firstName: driver?.user.first_name ?? registrationData?.firstName ?? "",
+    lastName: driver?.user.last_name ?? registrationData?.lastName ?? "",
     phoneNumber: formatPhoneDisplay(digits),
     dateOfBirth: formatDateDisplay(driver?.user.date_of_birth),
     profileImage: driver?.user.profile_image ?? "",
@@ -85,9 +86,30 @@ export function getErrorMessage(error: unknown): string {
   if (!error) return "Сталася невідома помилка";
   const err = error as any;
   
-  // Handle backend error object {code, message, details, timestamp}
   const data = err?.response?.data;
   if (data && typeof data === 'object') {
+    // Handle wrapped backend error: {error: {code, message, details, timestamp}}
+    if (data.error && typeof data.error === 'object') {
+      const details = data.error.details;
+      if (details && typeof details === 'object') {
+        for (const field of Object.keys(details)) {
+          const msgs = details[field];
+          if (Array.isArray(msgs) && msgs.length > 0) {
+            return formatFieldError(field, msgs[0]);
+          }
+        }
+      }
+      if (typeof data.error.message === 'string') return data.error.message;
+    }
+
+    // Handle direct DRF field errors: {"phone_number": ["..."]}
+    for (const field of Object.keys(data)) {
+      const msgs = data[field];
+      if (Array.isArray(msgs) && msgs.length > 0) {
+        return formatFieldError(field, msgs[0]);
+      }
+    }
+
     if (typeof data.message === 'string') return data.message;
     if (typeof data.error === 'string') return data.error;
     if (typeof data.detail === 'string') return data.detail;
@@ -96,4 +118,21 @@ export function getErrorMessage(error: unknown): string {
   if (typeof err.message === 'string') return err.message;
   
   return "Щось пішло не так, спробуйте ще раз";
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  phone_number: "Номер телефону",
+  date_of_birth: "Дата народження",
+  license_number: "Номер посвідчення",
+  license_expiry: "Термін дії прав",
+  vehicle_plate: "Номерний знак",
+  email: "Email",
+  first_name: "Ім'я",
+  last_name: "Прізвище",
+};
+
+function formatFieldError(field: string, message: string): string {
+  const label = FIELD_LABELS[field];
+  if (label) return `${label}: ${message}`;
+  return message;
 }

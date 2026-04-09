@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import {
   ActivityIndicator,
   Alert,
@@ -48,13 +49,23 @@ export default function ProfileScreen() {
   const isCompact = height < 780;
   const isNarrow = width < 360;
   const { user } = useUser();
+  const { signOut } = useAuth();
   const { data: driverData, isLoading, isError, error, refetch } = useDriverProfile();
   const { registerAsync, isLoading: isRegistering } = useDriverRegistration();
   const updateProfile = useUpdateUserProfile();
   const updateDriver = useUpdateDriverProfile();
   const uploadDocument = useUploadDriverDocument();
-  const { setDriver } = useDriverStore();
-  const { signOut } = useAuth();
+
+  const isFirstTime = !driverData;
+  const saveInProgress = updateProfile.isPending || updateDriver.isPending || uploadDocument.isPending || isRegistering;
+
+  const { setDriver, registrationData, clearRegistrationData } = useDriverStore(
+    useShallow((state) => ({
+      setDriver: state.setDriver,
+      registrationData: state.registrationData,
+      clearRegistrationData: state.clearRegistrationData,
+    }))
+  );
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [optimisticAvatar, setOptimisticAvatar] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({
@@ -89,8 +100,8 @@ export default function ProfileScreen() {
   }, []);
 
   const initialValues = useMemo(
-    () => mapDriverToFormValues(driverData),
-    [driverData],
+    () => mapDriverToFormValues(driverData, registrationData),
+    [driverData, registrationData],
   );
 
   const methods = useForm<ProfileFormValues>({
@@ -99,19 +110,19 @@ export default function ProfileScreen() {
 
   const {
     control,
-    reset,
-    watch,
-    setValue,
     handleSubmit,
+    setValue,
+    watch,
+    reset,
     formState: { errors, isDirty },
   } = methods;
 
   useEffect(() => {
     if (driverData) {
       setDriver(driverData);
-      reset(mapDriverToFormValues(driverData));
+      reset(mapDriverToFormValues(driverData, registrationData));
     }
-  }, [driverData, reset, setDriver]);
+  }, [driverData, reset, setDriver, registrationData]);
 
   const formValues = watch();
   const documents: DriverDocument[] = driverData?.documents ?? [];
@@ -149,23 +160,23 @@ export default function ProfileScreen() {
 
     const hasUserChanges = isDirty; // simplification
     const hasDocuments = docEntries.length > 0;
-    const isFirstTimeRegistration = !driverData;
+    // isFirstTime is now defined at component level
 
     try {
       // 1. Update User Profile always if there are changes or first time
       await updateProfile.mutateAsync(userPayload);
 
       // 2. If first time, register the driver
-      if (isFirstTimeRegistration) {
+      if (isFirstTime) {
         await registerAsync({
           vehicle_type: "economy",
-          vehicle_make: "Не вказано",
-          vehicle_model: "Не вказано",
+          vehicle_make: "",
+          vehicle_model: "",
           vehicle_year: new Date().getFullYear(),
-          vehicle_color: "Білий",
-          vehicle_plate: values.vehiclePlate || "Тимчасовий",
-          license_number: "Не вказано",
-          license_expiry: unmaskDateInput(values.licenseExpiry) || new Date().toISOString().split('T')[0],
+          vehicle_color: "",
+          vehicle_plate: values.vehiclePlate || null,
+          license_number: null,
+          license_expiry: unmaskDateInput(values.licenseExpiry) || null,
         } as any);
       } else {
         // 3. Update Driver Profile (only if not first time, because first time is handled by register)
@@ -197,7 +208,7 @@ export default function ProfileScreen() {
               uri: files.uri,
               name: files.name,
               type: files.type,
-            } as any);
+              } as any);
             await uploadDocument.mutateAsync(formData);
           }
         }
@@ -205,9 +216,12 @@ export default function ProfileScreen() {
       }
 
       reset(values);
-      showToast(isFirstTimeRegistration ? "Профіль створено успішно" : "Профіль оновлено");
+      showToast(isFirstTime ? "Профіль створено успішно" : "Профіль оновлено");
       
-      if (isFirstTimeRegistration) {
+      // Clear temporary registration data after successful profile setup
+      clearRegistrationData();
+
+      if (isFirstTime) {
         refetch();
       }
     } catch (error) {
@@ -261,7 +275,7 @@ export default function ProfileScreen() {
         setOptimisticAvatar(null);
       }, 2000);
       
-      Alert.alert("Успіх", "Фото профілю оновлено");
+      showToast("Фото профілю оновлено");
     } catch (error) {
       console.error("Avatar upload error:", error);
       Alert.alert("Помилка", "Не вдалося завантажити фото");
@@ -404,9 +418,7 @@ export default function ProfileScreen() {
   }
 
   const hasPendingDocs = docEntries.length > 0;
-  const saveInProgress = updateProfile.isPending || updateDriver.isPending || uploadDocument.isPending || isRegistering;
-  const isFirstTimeRegistration = !driverData;
-  const isSaveDisabled = saveInProgress || (!isDirty && !hasPendingDocs && !isFirstTimeRegistration);
+  const isSaveDisabled = saveInProgress || (!isDirty && !hasPendingDocs && !isFirstTime);
 
   const contentStyles = [
     styles.content,
@@ -442,8 +454,7 @@ export default function ProfileScreen() {
               <AvatarSection
                 imageUri={optimisticAvatar || formValues.profileImage}
                 placeholderInitial={
-                  driverData?.user?.first_name &&
-                  driverData.user.first_name.trim()
+                  driverData?.user?.first_name?.trim()
                     ? driverData.user.first_name.charAt(0).toUpperCase()
                     : "?"
                 }
@@ -470,7 +481,7 @@ export default function ProfileScreen() {
                 documents={documents}
                 onUpload={handleUploadDocument}
                 pendingDocuments={pendingDocFlags}
-                disableInteractions={saveInProgress}
+                disableInteractions={saveInProgress || isFirstTime}
                 compact={isCompact}
                 narrow={isNarrow}
               />
@@ -508,7 +519,7 @@ export default function ProfileScreen() {
                   <ActivityIndicator color="#FFF" />
                 ) : (
                   <Text style={styles.saveText}>
-                    {isFirstTimeRegistration ? "Створити профіль" : "Зберегти"}
+                    {isFirstTime ? "Створити профіль" : "Зберегти"}
                   </Text>
                 )}
               </TouchableOpacity>

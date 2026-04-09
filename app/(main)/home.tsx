@@ -5,12 +5,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   StatusBar,
-  Platform,
   Alert,
   ActivityIndicator,
+  Modal,
+  Pressable,
 } from "react-native";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@clerk/expo";
@@ -19,44 +19,117 @@ import { useDriverProfile } from "@/hooks/useDriverRegistration";
 import { useLocation } from "@/hooks/useLocation";
 import { Colors } from "@/constants/theme";
 
+// Custom icons
+import { HomeIcon } from "@/components/icons/HomeIcon";
+import { StarIcon } from "@/components/icons/StarIcon";
+import { WalletIcon } from "@/components/icons/WalletIcon";
+import { PersonIcon } from "@/components/icons/PersonIcon";
+import { DoubleArrowIcon } from "@/components/icons/DoubleArrowIcon";
+import { createAuthenticatedAPI } from "@/services/api";
+
 const PRIMARY = "#7900FF";
-const CARD_BG = "rgba(255,255,255,0.97)";
 
 type TabKey = "home" | "rating" | "start" | "wallet" | "profile";
 
-interface TabItem {
-  key: TabKey;
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  iconActive?: keyof typeof Ionicons.glyphMap;
+// ─────────────────────────── Start Modal ────────────────────────────────────
+function StartShiftModal({
+  visible,
+  onConfirm,
+  onCancel,
+}: {
+  visible: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <Pressable style={modalStyles.backdrop} onPress={onCancel}>
+        <View style={modalStyles.card}>
+          <View style={modalStyles.divider} />
+          <Text style={modalStyles.title}>Відкрити зміну?</Text>
+          <Text style={modalStyles.body}>
+            Ви переходите в онлайн-режим. Після відкриття зміни ви почнете отримувати замовлення.
+          </Text>
+          <View style={modalStyles.actions}>
+            <TouchableOpacity style={modalStyles.cancelBtn} onPress={onCancel} activeOpacity={0.8}>
+              <Text style={modalStyles.cancelText}>Скасувати</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={modalStyles.confirmBtn} onPress={onConfirm} activeOpacity={0.8}>
+              <Text style={modalStyles.confirmText}>Відкрити</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Pressable>
+    </Modal>
+  );
 }
 
-const TABS: TabItem[] = [
-  { key: "home", label: "Головна", icon: "home-outline", iconActive: "home" },
-  { key: "rating", label: "Рейтинг", icon: "star-outline", iconActive: "star" },
-  { key: "start", label: "ПОЧАТИ", icon: "chevron-up" },
-  { key: "wallet", label: "Гаманець", icon: "wallet-outline", iconActive: "wallet" },
-  { key: "profile", label: "Профіль", icon: "person-outline", iconActive: "person" },
-];
+// ─────────────────────────── Stop Modal ─────────────────────────────────────
+function StopShiftModal({
+  visible,
+  onConfirm,
+  onCancel,
+}: {
+  visible: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <Pressable style={modalStyles.backdrop} onPress={onCancel}>
+        <View style={modalStyles.card}>
+          <View style={modalStyles.divider} />
+          <Text style={modalStyles.title}>Закрити зміну?</Text>
+          <Text style={modalStyles.body}>
+            Ви переходите в офлайн-режим. Нові замовлення надходити не будуть.
+          </Text>
+          <View style={modalStyles.actions}>
+            <TouchableOpacity style={modalStyles.cancelBtn} onPress={onCancel} activeOpacity={0.8}>
+              <Text style={modalStyles.cancelText}>Скасувати</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[modalStyles.confirmBtn, { backgroundColor: "#EF4444" }]}
+              onPress={onConfirm}
+              activeOpacity={0.8}
+            >
+              <Text style={modalStyles.confirmText}>Закрити</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
 
+// ─────────────────────────── Main Screen ────────────────────────────────────
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { signOut } = useAuth();
+  const { getToken } = useAuth();
   const { data: driverData, isLoading } = useDriverProfile();
   const { location, address } = useLocation();
   const mapRef = useRef<MapView>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("home");
   const [isOnline, setIsOnline] = useState(false);
+  const [showStartModal, setShowStartModal] = useState(false);
+  const [showStopModal, setShowStopModal] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
-  // Redirect to profile if no driver profile
+  // Redirect to profile if no driver record exists
   useEffect(() => {
     if (!isLoading && driverData === null) {
       router.replace("/(main)/profile" as any);
     }
   }, [driverData, isLoading, router]);
 
-  // Auto-center map on location
+  // Set initial online/offline state from backend
+  useEffect(() => {
+    if (driverData) {
+      setIsOnline(driverData.availability === "online");
+    }
+  }, [driverData]);
+
+  // Center map when location is received
   useEffect(() => {
     if (location && mapRef.current) {
       mapRef.current.animateToRegion(
@@ -71,9 +144,22 @@ export default function HomeScreen() {
     }
   }, [location]);
 
+  const syncAvailability = async (availability: "online" | "offline") => {
+    setIsSyncing(true);
+    try {
+      const api = createAuthenticatedAPI(getToken);
+      await api.setAvailability(availability);
+      setIsOnline(availability === "online");
+    } catch (err) {
+      Alert.alert("Помилка", "Не вдалося змінити статус. Перевірте з'єднання.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleTabPress = (key: TabKey) => {
     if (key === "start") {
-      handleToggleOnline();
+      handleStartPress();
       return;
     }
     if (key === "profile") {
@@ -83,29 +169,34 @@ export default function HomeScreen() {
     setActiveTab(key);
   };
 
-  const handleToggleOnline = () => {
-    if (!isOnline) {
+  const handleStartPress = () => {
+    // Block if profile is still pending or not approved
+    const status = driverData?.status;
+    if (status !== "approved") {
       Alert.alert(
-        "Вийти в онлайн?",
-        "Ви готові приймати замовлення?",
-        [
-          { text: "Скасувати", style: "cancel" },
-          {
-            text: "Так, почати",
-            onPress: () => setIsOnline(true),
-          },
-        ],
+        "Недоступно",
+        status === "pending"
+          ? "Ваш профіль ще на перевірці. Зачекайте підтвердження адміністратора."
+          : "Ваш профіль не підтверджено.",
       );
-    } else {
-      Alert.alert(
-        "Перейти офлайн?",
-        "Зупинити отримання нових замовлень?",
-        [
-          { text: "Скасувати", style: "cancel" },
-          { text: "Так", onPress: () => setIsOnline(false) },
-        ],
-      );
+      return;
     }
+
+    if (isOnline) {
+      setShowStopModal(true);
+    } else {
+      setShowStartModal(true);
+    }
+  };
+
+  const handleConfirmStart = async () => {
+    setShowStartModal(false);
+    await syncAvailability("online");
+  };
+
+  const handleConfirmStop = async () => {
+    setShowStopModal(false);
+    await syncAvailability("offline");
   };
 
   const handleCenterMap = () => {
@@ -130,10 +221,10 @@ export default function HomeScreen() {
     );
   }
 
-  const driverName = driverData?.user?.first_name || "Водій";
   const driverStatus = driverData?.status;
   const isPending = driverStatus === "pending";
   const isApproved = driverStatus === "approved";
+  const isStartDisabled = !isApproved || isSyncing;
 
   const initialRegion = {
     latitude: location?.latitude || 48.6208,
@@ -164,44 +255,35 @@ export default function HomeScreen() {
           >
             <View style={[styles.carMarkerOuter, isOnline && styles.carMarkerOuterActive]}>
               <View style={styles.carMarkerInner}>
-                <Ionicons name="car" size={18} color={isOnline ? PRIMARY : "#555"} />
+                <Text style={{ fontSize: 16 }}>🚗</Text>
               </View>
             </View>
           </Marker>
         )}
       </MapView>
 
-      {/* TOP HEADER OVERLAY */}
+      {/* TOP HEADER */}
       <SafeAreaView style={styles.headerWrapper} edges={["top"]}>
         <View style={styles.headerRow}>
-          {/* Menu Button */}
           <TouchableOpacity style={styles.headerBtn} activeOpacity={0.8}>
-            <Ionicons name="menu" size={22} color="#fff" />
+            <Text style={{ fontSize: 18, color: "#fff" }}>☰</Text>
           </TouchableOpacity>
 
-          {/* Location Pill */}
           <View style={styles.locationPill}>
-            <Ionicons name="location" size={14} color={PRIMARY} />
+            <Text style={{ fontSize: 12, color: PRIMARY }}>📍</Text>
             <Text style={styles.locationText} numberOfLines={1}>
               {address || "МОЄ МІСТО"}
             </Text>
           </View>
 
-          {/* Right Buttons */}
-          <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.headerBtn} activeOpacity={0.8}>
-              <Ionicons name="search" size={20} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.headerBtn, { marginLeft: 8 }]} activeOpacity={0.8}>
-              <Ionicons name="notifications-outline" size={20} color="#fff" />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.headerBtn} activeOpacity={0.8}>
+            <Text style={{ fontSize: 16, color: "#fff" }}>🔔</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Status Banner */}
         {isPending && (
           <View style={styles.statusBanner}>
-            <Ionicons name="time-outline" size={16} color="#f59e0b" />
+            <Text style={{ fontSize: 14 }}>⏳</Text>
             <Text style={styles.statusBannerText}>
               Ваш профіль на перевірці. Зачекайте підтвердження.
             </Text>
@@ -209,99 +291,114 @@ export default function HomeScreen() {
         )}
       </SafeAreaView>
 
-      {/* Top Right: Online Status Badge */}
-      <View style={[styles.onlineBadge, { top: insets.top + 70 }]}>
-        <View style={[styles.onlineDot, isOnline ? styles.onlineDotActive : styles.onlineDotOff]} />
-        <Text style={[styles.onlineLabel, { color: isOnline ? "#22c55e" : "#9ca3af" }]}>
-          {isOnline ? "Онлайн" : "Офлайн"}
-        </Text>
-      </View>
-
-      {/* Center on location button */}
+      {/* Center button */}
       <TouchableOpacity
-        style={[styles.centerBtn, { bottom: 100 + insets.bottom }]}
+        style={[styles.centerBtn, { bottom: 110 + insets.bottom }]}
         onPress={handleCenterMap}
         activeOpacity={0.8}
       >
-        <Ionicons name="navigate" size={22} color="#444" />
+        <Text style={{ fontSize: 20 }}>🎯</Text>
       </TouchableOpacity>
 
-      {/* Earnings Widget */}
-      {isApproved && (
-        <View style={[styles.earningsCard, { bottom: 100 + insets.bottom }]}>
-          <Text style={styles.earningsLabel}>Сьогодні</Text>
-          <Text style={styles.earningsAmount}>
-            {Number(driverData?.total_earnings || 0).toFixed(0)} ₴
+      {/* ─── BOTTOM TAB BAR ─── */}
+      <View style={[styles.tabBar, { paddingBottom: insets.bottom + 6 }]}>
+        {/* Home */}
+        <TouchableOpacity
+          style={styles.tabItem}
+          onPress={() => handleTabPress("home")}
+          activeOpacity={0.7}
+        >
+          <HomeIcon size={26} color={activeTab === "home" ? PRIMARY : "#9ca3af"} />
+          <Text style={[styles.tabLabel, activeTab === "home" && styles.tabLabelActive]}>
+            Головна
           </Text>
-          <Text style={styles.earningsRides}>{driverData?.total_rides || 0} поїздок</Text>
+        </TouchableOpacity>
+
+        {/* Rating */}
+        <TouchableOpacity
+          style={styles.tabItem}
+          onPress={() => handleTabPress("rating")}
+          activeOpacity={0.7}
+        >
+          <StarIcon size={26} color={activeTab === "rating" ? PRIMARY : "#9ca3af"} />
+          <Text style={[styles.tabLabel, activeTab === "rating" && styles.tabLabelActive]}>
+            Рейтинг
+          </Text>
+        </TouchableOpacity>
+
+        {/* START button – centre */}
+        <View style={styles.startWrapper}>
+          <TouchableOpacity
+            style={[
+              styles.startBtn,
+              isOnline && styles.startBtnOnline,
+              isStartDisabled && styles.startBtnDisabled,
+            ]}
+            onPress={handleStartPress}
+            activeOpacity={isStartDisabled ? 1 : 0.85}
+            disabled={isSyncing}
+          >
+            {isSyncing ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <DoubleArrowIcon size={32} color="#fff" />
+            )}
+          </TouchableOpacity>
+          <Text style={[styles.startLabel, isOnline && { color: "#22c55e" }]}>
+            {isOnline ? "ВИ ОНЛАЙН" : "ПОЧАТИ"}
+          </Text>
         </View>
-      )}
 
-      {/* BOTTOM TAB BAR */}
-      <View style={[styles.tabBar, { paddingBottom: insets.bottom + 4 }]}>
-        {TABS.map((tab) => {
-          const isActive = tab.key === activeTab;
-          const isStartBtn = tab.key === "start";
+        {/* Wallet */}
+        <TouchableOpacity
+          style={styles.tabItem}
+          onPress={() => handleTabPress("wallet")}
+          activeOpacity={0.7}
+        >
+          <WalletIcon size={26} color={activeTab === "wallet" ? PRIMARY : "#9ca3af"} />
+          <Text style={[styles.tabLabel, activeTab === "wallet" && styles.tabLabelActive]}>
+            Гаманець
+          </Text>
+        </TouchableOpacity>
 
-          if (isStartBtn) {
-            return (
-              <TouchableOpacity
-                key={tab.key}
-                style={styles.startBtnWrapper}
-                onPress={() => handleTabPress(tab.key)}
-                activeOpacity={0.85}
-              >
-                <View style={[styles.startBtn, isOnline && styles.startBtnActive]}>
-                  <Ionicons
-                    name={isOnline ? "pause" : "chevron-up"}
-                    size={26}
-                    color="#fff"
-                  />
-                </View>
-                <Text style={[styles.tabLabel, styles.startLabel]}>
-                  {isOnline ? "СТОП" : "ПОЧАТИ"}
-                </Text>
-              </TouchableOpacity>
-            );
-          }
-
-          return (
-            <TouchableOpacity
-              key={tab.key}
-              style={styles.tabItem}
-              onPress={() => handleTabPress(tab.key)}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name={isActive && tab.iconActive ? tab.iconActive : tab.icon}
-                size={24}
-                color={isActive ? PRIMARY : "#9ca3af"}
-              />
-              <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+        {/* Profile */}
+        <TouchableOpacity
+          style={styles.tabItem}
+          onPress={() => handleTabPress("profile")}
+          activeOpacity={0.7}
+        >
+          <PersonIcon size={26} color={activeTab === "profile" ? PRIMARY : "#9ca3af"} />
+          <Text style={[styles.tabLabel, activeTab === "profile" && styles.tabLabelActive]}>
+            Профіль
+          </Text>
+        </TouchableOpacity>
       </View>
+
+      {/* Modals */}
+      <StartShiftModal
+        visible={showStartModal}
+        onConfirm={handleConfirmStart}
+        onCancel={() => setShowStartModal(false)}
+      />
+      <StopShiftModal
+        visible={showStopModal}
+        onConfirm={handleConfirmStop}
+        onCancel={() => setShowStopModal(false)}
+      />
     </View>
   );
 }
 
+// ─────────────────────────── Styles ─────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
+  container: { flex: 1, backgroundColor: "#fff" },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#fff",
   },
-  map: {
-    ...StyleSheet.absoluteFillObject,
-  },
+  map: { ...StyleSheet.absoluteFillObject },
 
   // Header
   headerWrapper: {
@@ -352,10 +449,6 @@ const styles = StyleSheet.create({
     color: "#1f1f1f",
     letterSpacing: 0.5,
   },
-  headerRight: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
   statusBanner: {
     marginHorizontal: 16,
     marginTop: 4,
@@ -376,52 +469,16 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  // Online badge
-  onlineBadge: {
-    position: "absolute",
-    right: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    gap: 5,
-    zIndex: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  onlineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  onlineDotActive: {
-    backgroundColor: "#22c55e",
-  },
-  onlineDotOff: {
-    backgroundColor: "#9ca3af",
-  },
-  onlineLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-
   // Car marker
   carMarkerOuter: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: "rgba(100,100,100,0.15)",
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(100,100,100,0.12)",
     justifyContent: "center",
     alignItems: "center",
   },
-  carMarkerOuterActive: {
-    backgroundColor: "rgba(121, 0, 255, 0.15)",
-  },
+  carMarkerOuterActive: { backgroundColor: "rgba(121, 0, 255, 0.12)" },
   carMarkerInner: {
     width: 34,
     height: 34,
@@ -431,7 +488,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.18,
     shadowRadius: 4,
     elevation: 4,
   },
@@ -454,42 +511,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
 
-  // Earnings widget
-  earningsCard: {
-    position: "absolute",
-    left: 16,
-    backgroundColor: CARD_BG,
-    borderRadius: 14,
-    padding: 12,
-    zIndex: 10,
-    alignItems: "center",
-    minWidth: 80,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  earningsLabel: {
-    fontSize: 10,
-    color: "#9ca3af",
-    fontWeight: "500",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  earningsAmount: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#1f1f1f",
-    marginTop: 2,
-  },
-  earningsRides: {
-    fontSize: 10,
-    color: "#9ca3af",
-    marginTop: 1,
-  },
-
-  // Tab bar
+  // ─── Tab Bar ───
   tabBar: {
     position: "absolute",
     bottom: 0,
@@ -500,26 +522,26 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     paddingTop: 10,
     paddingHorizontal: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     zIndex: 20,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 10,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 16,
   },
   tabItem: {
     flex: 1,
     alignItems: "center",
     paddingBottom: 4,
-    gap: 2,
+    gap: 3,
   },
   tabLabel: {
     fontSize: 10,
     color: "#9ca3af",
     fontWeight: "500",
-    marginTop: 2,
+    marginTop: 1,
   },
   tabLabelActive: {
     color: PRIMARY,
@@ -527,33 +549,107 @@ const styles = StyleSheet.create({
   },
 
   // Start Button
-  startBtnWrapper: {
+  startWrapper: {
     flex: 1,
     alignItems: "center",
     paddingBottom: 4,
-    gap: 2,
-    marginTop: -20,
+    marginTop: -28,
+    gap: 3,
   },
   startBtn: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: "#6b7280",
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.22,
     shadowRadius: 8,
-    elevation: 8,
+    elevation: 10,
   },
-  startBtnActive: {
-    backgroundColor: PRIMARY,
+  startBtnOnline: {
+    backgroundColor: "#22c55e",
+  },
+  startBtnDisabled: {
+    opacity: 0.45,
   },
   startLabel: {
-    color: PRIMARY,
-    fontWeight: "800",
     fontSize: 10,
+    fontWeight: "800",
+    color: PRIMARY,
     letterSpacing: 0.5,
+  },
+});
+
+// ─────────────────────────── Modal Styles ───────────────────────────────────
+const modalStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+    paddingBottom: 30,
+    paddingHorizontal: 16,
+  },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 24,
+    paddingTop: 12,
+  },
+  divider: {
+    width: 40,
+    height: 4,
+    backgroundColor: "#e5e7eb",
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  body: {
+    fontSize: 14,
+    color: "#6b7280",
+    lineHeight: 20,
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  actions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  cancelBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff",
+  },
+  cancelText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  confirmBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: "#22c55e",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  confirmText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#fff",
   },
 });
