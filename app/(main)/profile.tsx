@@ -288,7 +288,7 @@ export default function ProfileScreen() {
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace("/(main)/home" as any);
+      router.replace("/(main)" as any);
     }
   };
 

@@ -41,7 +41,7 @@ export default function LoginScreen() {
           (signInError.longMessage || '').toLowerCase().includes('already signed in');
 
         if (isAlreadySignedIn) {
-          router.replace('/(main)/home' as any);
+          router.replace('/(main)' as any);
           return;
         }
 
@@ -55,7 +55,7 @@ export default function LoginScreen() {
         
         if (signIn.createdSessionId) {
           await setActive({ session: signIn.createdSessionId });
-          router.replace('/(main)/home' as any);
+          router.replace('/(main)' as any);
         }
       } else {
         // Handle other statuses like MFA if needed

@@ -73,5 +73,6 @@ export const createAuthenticatedAPI = (
       }),
     setAvailability: (availability: string) =>
       authenticatedClient.patch("/drivers/availability/", { availability }),
+    getRatingStats: () => authenticatedClient.get("/drivers/rating_stats/"),
   };
 };

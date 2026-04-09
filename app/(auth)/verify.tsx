@@ -51,7 +51,7 @@ export default function VerifyScreen() {
         const { createdSessionId } = signUp;
         if (createdSessionId) {
           await setActive({ session: createdSessionId });
-          router.replace('/(main)/home' as any);
+          router.replace('/(main)' as any);
         }
       }
     } catch (err: any) {

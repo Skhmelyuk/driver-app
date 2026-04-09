@@ -3,6 +3,7 @@ import { ClerkProvider } from "@clerk/expo";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
+import { DriverStatusProvider } from "./DriverStatusProvider";
 
 const queryClient = new QueryClient();
 
@@ -47,7 +48,9 @@ export function AppProvider({ children }: AppProviderProps) {
 
   return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <QueryClientProvider client={queryClient}>
+        <DriverStatusProvider>{children}</DriverStatusProvider>
+      </QueryClientProvider>
     </ClerkProvider>
   );
 }
