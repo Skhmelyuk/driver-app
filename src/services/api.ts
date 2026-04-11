@@ -74,5 +74,15 @@ export const createAuthenticatedAPI = (
     setAvailability: (availability: string) =>
       authenticatedClient.patch("/drivers/availability/", { availability }),
     getRatingStats: () => authenticatedClient.get("/drivers/rating_stats/"),
+    getWalletStats: (date?: string) =>
+      authenticatedClient.get("/drivers/wallet_stats/", {
+        params: date ? { date } : undefined,
+      }),
+    requestWithdrawal: () =>
+      authenticatedClient.post("/drivers/request_withdrawal/"),
+    getWithdrawalHistory: () =>
+      authenticatedClient.get("/drivers/withdrawal_history/"),
+    savePayoutCard: (card_number: string) =>
+      authenticatedClient.patch("/drivers/payout_card/", { card_number }),
   };
 };
