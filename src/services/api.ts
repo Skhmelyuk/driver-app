@@ -1,5 +1,6 @@
 import axios from "axios";
 import type { Driver, DriverRegistrationData } from "@/types/auth.types";
+import type { ActiveRide } from "@/types/ride.types";
 
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
@@ -84,5 +85,28 @@ export const createAuthenticatedAPI = (
       authenticatedClient.get("/drivers/withdrawal_history/"),
     savePayoutCard: (card_number: string) =>
       authenticatedClient.patch("/drivers/payout_card/", { card_number }),
+
+    // Ride lifecycle
+    getActiveRideForDriver: async (): Promise<ActiveRide | null> => {
+      const response = await authenticatedClient.get<{
+        ride: ActiveRide | null;
+      }>("/rides/active_for_driver/");
+      return response.data.ride;
+    },
+    acceptRide: (rideId: string) =>
+      authenticatedClient.post(`/rides/${rideId}/accept/`),
+    rejectRide: (rideId: string) =>
+      authenticatedClient.post(`/rides/${rideId}/reject/`),
+    startRide: (rideId: string) =>
+      authenticatedClient.post(`/rides/${rideId}/start/`),
+    completeRide: (rideId: string, actualDistanceKm?: number) =>
+      authenticatedClient.post(`/rides/${rideId}/complete/`, {
+        actual_distance_km: actualDistanceKm,
+      }),
+    ratePassenger: (rideId: string, rating: number, comment?: string) =>
+      authenticatedClient.post(`/rides/${rideId}/rate_passenger/`, {
+        rating,
+        comment: comment || "",
+      }),
   };
 };

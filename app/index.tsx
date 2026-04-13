@@ -26,7 +26,7 @@ export default function Index() {
   }
 
   if (isSignedIn) {
-    return <Redirect href="/(main)" />;
+    return <Redirect href={"/(main)" as any} />;
   }
 
   return <Redirect href="/(auth)/welcome" />;

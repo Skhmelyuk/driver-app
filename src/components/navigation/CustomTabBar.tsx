@@ -11,6 +11,7 @@ import {
 import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { useRouter } from "expo-router";
 import { useDriverStatus } from "@/providers/DriverStatusProvider";
+import { useRideRequest } from "@/providers/RideRequestProvider";
 
 // Icons
 import { HomeIcon } from "@/components/icons/HomeIcon";
@@ -104,7 +105,11 @@ function StopShiftModal({
 }
 
 // ─────────────────────────── Custom Tab Bar ────────────────────────────────────
-export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+export function CustomTabBar({
+  state,
+  descriptors,
+  navigation,
+}: BottomTabBarProps) {
   const router = useRouter();
   const {
     isOnline,
@@ -118,6 +123,11 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
     handleConfirmStart,
     handleConfirmStop,
   } = useDriverStatus();
+  const { hasRideRequest } = useRideRequest();
+
+  if (hasRideRequest) {
+    return null;
+  }
 
   return (
     <View style={styles.tabBar}>
@@ -127,11 +137,10 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
         onPress={() => navigation.navigate("index")}
         activeOpacity={0.7}
       >
-        <HomeIcon
-          size={28}
-          color={state.index === 0 ? PRIMARY : "#9ca3af"}
-        />
-        <Text style={[styles.tabLabel, state.index === 0 && styles.tabLabelActive]}>
+        <HomeIcon size={28} color={state.index === 0 ? PRIMARY : "#9ca3af"} />
+        <Text
+          style={[styles.tabLabel, state.index === 0 && styles.tabLabelActive]}
+        >
           Головна
         </Text>
       </TouchableOpacity>
@@ -142,11 +151,10 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
         onPress={() => navigation.navigate("rating")}
         activeOpacity={0.7}
       >
-        <StarIcon
-          size={28}
-          color={state.index === 1 ? PRIMARY : "#9ca3af"}
-        />
-        <Text style={[styles.tabLabel, state.index === 1 && styles.tabLabelActive]}>
+        <StarIcon size={28} color={state.index === 1 ? PRIMARY : "#9ca3af"} />
+        <Text
+          style={[styles.tabLabel, state.index === 1 && styles.tabLabelActive]}
+        >
           Рейтинг
         </Text>
       </TouchableOpacity>
@@ -188,11 +196,10 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
         onPress={() => navigation.navigate("wallet")}
         activeOpacity={0.7}
       >
-        <WalletIcon
-          size={28}
-          color={state.index === 2 ? PRIMARY : "#9ca3af"}
-        />
-        <Text style={[styles.tabLabel, state.index === 2 && styles.tabLabelActive]}>
+        <WalletIcon size={28} color={state.index === 2 ? PRIMARY : "#9ca3af"} />
+        <Text
+          style={[styles.tabLabel, state.index === 2 && styles.tabLabelActive]}
+        >
           Гаманець
         </Text>
       </TouchableOpacity>

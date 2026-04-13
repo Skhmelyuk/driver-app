@@ -5,6 +5,8 @@ export default function MainLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="profile" />
+      <Stack.Screen name="confirm-price" />
+      <Stack.Screen name="rate-passenger" />
     </Stack>
   );
 }
